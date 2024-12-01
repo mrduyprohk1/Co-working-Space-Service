@@ -10,7 +10,7 @@ from model import Token
 from config import app, db
 
 
-port_number = int(os.environ.get("APP_PORT", 5153))
+port_number = int(os.environ.get("APP_PORT", 5154))
 
 
 @app.route("/health_check")
@@ -74,7 +74,7 @@ def all_user_visits():
             "joined_at": str(row[2])
         }
     
-    return jsonify(response)
+    return jsonify(response)    
 
 
 scheduler = BackgroundScheduler()

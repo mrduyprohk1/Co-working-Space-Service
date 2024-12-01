@@ -1,108 +1,92 @@
-# Project: Operationalizing a Coworking Space Microservice
+# Coworking Space Service Extension
+The Coworking Space Service is a set of APIs that enables users to request one-time tokens and administrators to authorize access to a coworking space. This service follows a microservice pattern and the APIs are split into distinct services that can be deployed and managed independently of one another.
 
-## Coworking Space Service Extension
-
-The Coworking Space Service comprises a suite of APIs that enable users to request one-time tokens and allow administrators to manage access to coworking spaces. Following a microservice architecture, each service is designed to be deployed and managed independently.
-
-In this project, as the DevOps engineer, you will collaborate with a team responsible for developing an API that delivers key analytics on user activity within the service. Although the application runs smoothly in a local environment, your primary task is to create a pipeline for its deployment in a Kubernetes cluster.
+For this project, you are a DevOps engineer who will be collaborating with a team that is building an API for business analysts. The API provides business analysts basic analytics data on user activity in the service. The application they provide you functions as expected locally and you are expected to help build a pipeline to deploy it in Kubernetes.
 
 ## Getting Started
 
 ### Dependencies
-
 #### Local Environment
-1. **Python Environment**: Required to run Python 3.6+ applications and install Python dependencies using `pip`.
-2. **Docker CLI**: Essential for building and running Docker images locally.
-3. **kubectl**: Necessary to execute commands against a Kubernetes cluster.
-4. **helm**: Needed to apply Helm Charts to a Kubernetes cluster.
+1. Python Environment - run Python 3.6+ applications and install Python dependencies via `pip`
+2. Docker CLI - build and run Docker images locally
+3. `kubectl` - run commands against a Kubernetes cluster
+4. `helm` - apply Helm Charts to a Kubernetes cluster
+5. `eksctl` - create an EKS cluster
 
 #### Remote Resources
+1. AWS CodeBuild - build Docker images remotely
+2. AWS ECR - host Docker images
+3. Kubernetes Environment with AWS EKS - run applications in k8s
+4. AWS CloudWatch - monitor activity and logs in EKS
+5. GitHub - pull and clone code
 
-1. **AWS CodeBuild**: Used for remote Docker image builds.
-2. **AWS ECR**: Hosts Docker images.
-3. **Kubernetes Environment with AWS EKS**: Deploys applications in Kubernetes.
-4. **AWS CloudWatch**: Monitors activity and logs in EKS.
-5. **GitHub**: Pulls and clones the code repository.
+### Deploying an analytics as a Microservice to Kubernetes using AWS:
+#### 1. Create a repository using AWS Elastic Container Registry (ERC)
+#### 2. Create build project using AWS CodeBuild
+* Attach the Elastic Container Registry role permisstions to CodeBuildBasePolicy: [BatchCheckLayerAvailability, BatchGetImage, GetAuthorizationToken, GetDownloadUrlForLayer, CompleteLayerUpload, InitiateLayerUpload, PutImage, UploadLayerPart]
+* Add Environment variables: [AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, IMAGE_REPO_NAME, IMAGE_TAG]
+* Set GitHub repository have file buildspec.yml and Dockerfile
 
-
-#### Project Structure
-```shell
-
-├── CODEOWNERS
-├── LICENSE.txt
-├── README.md
-├── analytics
-│   ├── Dockerfile
-│   ├── __init__.py
-│   ├── app.py
-│   ├── config.py
-│   ├── model.py
-│   └── requirements.txt
-├── buildspec.yml
-├── db
-│   ├── 1_create_tables.sql
-│   ├── 2_seed_users.sql
-│   └── 3_seed_tokens.sql
-├── deployment
-│   ├── configmap.yaml
-│   ├── coworking.yaml
-│   └── secret.yaml
-├── deployment-local
-│   ├── configmap.yaml
-│   └── coworking.yaml
-├── screenshots
-│   ├── api.png
-│   ├── api1.png
-│   ├── api2.png
-│   ├── api3.png
-│   ├── cloudwatch.png
-│   ├── codebuild.png
-│   ├── codebuild1.png
-│   ├── describe_deployment.png
-│   ├── describe_svc.png
-│   ├── describe_svc1.png
-│   ├── ecr.png
-│   ├── get_deployment.png
-│   └── logs.png
-└── scripts
-    ├── create_cluster.sh
-    ├── create_ecr.sh
-    └── helm_sql.sh
+#### 3. Create an EKS Cluster using eksctl CLI tool
+* Using eksctl to create an EKS Cluster
+```bash
+eksctl create cluster --name udacity --region us-east-1 --nodegroup-name udacity-nodes --node-type t3.small --nodes 1 --nodes-min 1 --nodes-max 2
 ```
 
-- `scripts`: Bash scripts to facilitate project tasks.
-- `db`: SQL scripts for seeding data.
-- `deployment`: Kubernetes YAML files for deployment and configuration.
+* Update the Kubeconfig
+```bash
+aws eks --region us-east-1 update-kubeconfig --name udacity
+```
 
-#### How to Run
+* Attach the CloudWatchAgentServerPolicy IAM policy to your worker nodes
+```bash
+aws iam attach-role-policy \
+--role-name eksctl-udacity-cluster-ServiceRole-Al8FvjMlCB4p \
+--policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy  
+```
 
-1. Run `bin/create-cluster.sh`: Create a Kubernetes cluster and update `kubectl` configuration.
-2. Run `bin/helm_sql.sh`: Create a PostgreSQL database service.
-3. Run `bin/deployment.sh`: Deploy using `kubectl`.
+* Use AWS CLI to install the Amazon CloudWatch Observability EKS add-on
+```bash
+aws eks create-addon --addon-name amazon-cloudwatch-observability --cluster-name udacity
+```
 
-### CloudWatch Metrics in EKS
+#### 4. Configure a Database
+Set up a Postgres database using a Helm Chart.
 
-Refer to [CloudWatch Metrics in EKS](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Observability-EKS-addon.html) for more information on CloudWatch metrics in EKS.
+1. Set up Bitnami Repo
+```bash
+helm repo add udacity-bitnami https://charts.bitnami.com/bitnami
+helm repo update
+```
 
-### Get Web API URL
+2. Install PostgreSQL Helm Chart
+```bash
+helm install my-postgresql udacity-bitnami/postgresql --set primary.persistence.enabled=false
+```
 
-To access the Web API, follow these steps:
+This should set up a Postgre deployment at `my-postgresql.default.svc.cluster.local` in your Kubernetes cluster. You can verify it by running `kubectl svc`
 
-1. Get the load balancer external IP:
+* By default, it will create a username `postgres`. The password can be retrieved with the following command:
+```bash
+export POSTGRES_PASSWORD=$(kubectl get secret --namespace default my-postgresql -o jsonpath="{.data.postgres-password}" | base64 -d)
 
-   ```shell
-   kubectl get svc
-   ```
+echo $POSTGRES_PASSWORD
+```
 
-   ![Kubectl Get SVC](./screenshots/describe_svc.png)
+* Connecting Via Port Forwarding
+```bash
+kubectl port-forward --namespace default svc/my-postgresql 5432:5432 &
+```
+3. Run Seed Files
+We will need to run the seed files in `db/` in order to create the tables and populate them with data.
 
-2. Access the Web API using the provided external IP.
+4. Export password of database in base64 and replace value of DB_PASSWORD in configmap.yaml 
 
-   ![Web API](./screenshots/api.png)
-   ![Web API](./screenshots/api1.png)
+#### 5. Deploy configmap.yaml and project4-api.yaml
+```bash
+cd .\deployment\
+kubectl apply -f configmap.yaml
+kubectl apply -f coworking.yaml 
+ ```
 
-### CloudWatch
-
-View metrics and logs in CloudWatch:
-
-![CloudWatch](./screenshots/cloudwatch.png)
+For troubleshooting, logs from the container or application running as a Kubernetes pod are sent to a log group that can be accessed through AWS CloudWatch under Log Groups.

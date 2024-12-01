@@ -1,0 +1,30 @@
+./create_cluster.sh my-cluster us-east-1
+
+kubectl config current-context
+
+Output:arn:aws:eks:us-west-2:411764878390902:cluster/my-cluster
+
+kubectl config view
+
+===========================================================
+eksctl delete cluster --name my-cluster --region us-east-1
+===========================================================
+Before you start, ensure you are connected to your K8s cluster
+kubectl get namespace
+
+kubectl get storageclass
+kubectl apply -f pvc.yaml
+kubectl apply -f pv.yaml
+kubectl apply -f postgresql-deployment.yaml
+
+kubectl apply -f configmap.yaml
+kubectl apply -f secret.yaml 
+
+kubectl get pods
+
+psql -U myuser -d mydatabase
+
+aws iam attach-role-policy \
+--role-name eksctl-my-cluster-nodegroup-my-nod-NodeInstanceRole-Al8FvjMlCB4p \
+--policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy 
+aws eks create-addon --addon-name amazon-cloudwatch-observability --cluster-name my-cluster
