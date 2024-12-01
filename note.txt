@@ -1,4 +1,4 @@
-AUTO PUSH CODEBUILD
+AUTO PUSH CODEBUILD 123
 ./create_cluster.sh my-cluster us-east-1
 
 kubectl config current-context
